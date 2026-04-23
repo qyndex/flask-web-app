@@ -70,6 +70,98 @@ class TestDashboardView:
         assert published_post.title.encode() in response.data
 
 
+class TestCreatePostView:
+    """GET/POST /posts/new — create new post, login required."""
+
+    def test_redirects_unauthenticated_user(self, client):
+        response = client.get("/posts/new")
+        assert response.status_code == 302
+        assert "/auth/login" in response.headers["Location"]
+
+    def test_returns_200_for_logged_in_user(self, logged_in_client):
+        response = logged_in_client.get("/posts/new")
+        assert response.status_code == 200
+
+    def test_creates_post_and_redirects(self, logged_in_client, db, category):
+        db.session.commit()
+        response = logged_in_client.post(
+            "/posts/new",
+            data={
+                "title": "My New Post",
+                "body": "Content of the new post.",
+                "category_id": str(category.id),
+                "is_published": "1",
+            },
+            follow_redirects=True,
+        )
+        assert response.status_code == 200
+        assert b"Post created" in response.data
+
+    def test_missing_title_shows_error(self, logged_in_client):
+        response = logged_in_client.post(
+            "/posts/new",
+            data={"title": "", "body": "Some body"},
+            follow_redirects=True,
+        )
+        assert b"required" in response.data
+
+
+class TestEditPostView:
+    """GET/POST /posts/<id>/edit — edit post, login required."""
+
+    def test_redirects_unauthenticated_user(self, client, published_post):
+        response = client.get(f"/posts/{published_post.id}/edit")
+        assert response.status_code == 302
+
+    def test_returns_200_for_author(self, logged_in_client, published_post):
+        response = logged_in_client.get(f"/posts/{published_post.id}/edit")
+        assert response.status_code == 200
+
+    def test_updates_post_and_redirects(self, logged_in_client, published_post, db):
+        db.session.commit()
+        response = logged_in_client.post(
+            f"/posts/{published_post.id}/edit",
+            data={
+                "title": "Updated Title",
+                "body": "Updated body content.",
+                "is_published": "1",
+            },
+            follow_redirects=True,
+        )
+        assert response.status_code == 200
+        assert b"Post updated" in response.data
+
+
+class TestContactView:
+    """GET/POST /contact — contact form."""
+
+    def test_contact_page_returns_200(self, client):
+        response = client.get("/contact")
+        assert response.status_code == 200
+
+    def test_submit_contact_form(self, client, db):
+        response = client.post(
+            "/contact",
+            data={
+                "name": "Test User",
+                "email": "test@example.com",
+                "subject": "Hello",
+                "message": "This is a test message.",
+            },
+            follow_redirects=True,
+        )
+        assert response.status_code == 200
+        assert b"Message sent" in response.data
+
+    def test_missing_fields_shows_error(self, client):
+        response = client.post(
+            "/contact",
+            data={"name": "", "email": "", "subject": "", "message": ""},
+            follow_redirects=True,
+        )
+        assert b"required" in response.data
+
+
 # ---------------------------------------------------------------------------
 # Auth blueprint
 # ---------------------------------------------------------------------------
@@ -277,3 +369,17 @@ class TestApiListCategories:
         data = client.get("/api/categories").get_json()
         names = [c["name"] for c in data]
         assert category.name in names
+
+
+# ---------------------------------------------------------------------------
+# Error handlers
+# ---------------------------------------------------------------------------
+
+
+class TestErrorHandlers:
+    """Custom error handler pages."""
+
+    def test_404_returns_custom_page(self, client):
+        response = client.get("/nonexistent-page-xyz")
+        assert response.status_code == 404
+        assert b"404" in response.data

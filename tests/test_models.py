@@ -1,8 +1,8 @@
-"""Tests for SQLAlchemy models: User, Category, Post."""
+"""Tests for SQLAlchemy models: User, Category, Post, ContactMessage."""
 import pytest
 from werkzeug.security import check_password_hash
 
-from app.models import Category, Post, User
+from app.models import Category, ContactMessage, Post, User
 
 
 # ---------------------------------------------------------------------------
@@ -42,6 +42,20 @@ class TestUserModel:
         db.session.add(u)
         db.session.commit()
         assert u.is_admin is False
+
+    def test_full_name_is_optional(self, db):
+        u = User(username="grace", email="grace@example.com")
+        u.set_password("pass")
+        db.session.add(u)
+        db.session.commit()
+        assert u.full_name is None
+
+    def test_full_name_can_be_set(self, db):
+        u = User(username="heidi", email="heidi@example.com", full_name="Heidi Johnson")
+        u.set_password("pass")
+        db.session.add(u)
+        db.session.commit()
+        assert u.full_name == "Heidi Johnson"
 
     def test_username_is_unique(self, db, user):
         duplicate = User(username=user.username, email="other@example.com")
@@ -200,3 +214,56 @@ class TestPostModel:
     def test_category_posts_backref(self, category, published_post, db):
         post_ids = [p.id for p in category.posts]
         assert published_post.id in post_ids
+
+
+# ---------------------------------------------------------------------------
+# ContactMessage model
+# ---------------------------------------------------------------------------
+
+
+class TestContactMessageModel:
+    """Unit tests for the ContactMessage model."""
+
+    def test_create_contact_message(self, db):
+        msg = ContactMessage(
+            name="Jane",
+            email="jane@example.com",
+            subject="Test",
+            message="Hello!",
+        )
+        db.session.add(msg)
+        db.session.commit()
+        assert msg.id is not None
+
+    def test_is_read_defaults_to_false(self, db):
+        msg = ContactMessage(
+            name="John",
+            email="john@example.com",
+            subject="Inquiry",
+            message="A question.",
+        )
+        db.session.add(msg)
+        db.session.commit()
+        assert msg.is_read is False
+
+    def test_created_at_set_on_insert(self, db):
+        msg = ContactMessage(
+            name="Bob",
+            email="bob@example.com",
+            subject="Hi",
+            message="Message body.",
+        )
+        db.session.add(msg)
+        db.session.commit()
+        assert msg.created_at is not None
+
+    def test_repr(self, db):
+        msg = ContactMessage(
+            name="Test",
+            email="t@t.com",
+            subject="My Subject",
+            message="Body",
+        )
+        db.session.add(msg)
+        db.session.commit()
+        assert "My Subject" in repr(msg)
